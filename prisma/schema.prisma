@@ -7,3 +7,131 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ─── Auth.js 필수 모델 ───────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  tickets       Ticket[]
+  posts         CommunityPost[]
+  comments      Comment[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── 서비스 핵심 모델 ────────────────────────────────────────────
+
+model Concert {
+  id           String          @id @default(cuid())
+  title        String
+  artist       String
+  venue        String
+  date         DateTime
+  description  String?
+  posterUrl    String?
+  price        Int             // 단위: 원 (KRW)
+  totalTickets Int             // 판매 가능 총 수량
+  soldTickets  Int             @default(0)
+  tickets      Ticket[]
+  posts        CommunityPost[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  orderId         String        @unique // 토스페이먼츠 주문 ID
+  amount          Int
+  status          PaymentStatus @default(PENDING)
+  tossPaymentKey  String?       @unique // 결제 완료 후 수신
+  ticket          Ticket?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Ticket {
+  id        String   @id @default(cuid())
+  userId    String
+  concertId String
+  paymentId String   @unique
+  quantity  Int
+  user      User     @relation(fields: [userId], references: [id])
+  concert   Concert  @relation(fields: [concertId], references: [id])
+  payment   Payment  @relation(fields: [paymentId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, concertId]) // 한 유저는 공연당 하나의 티켓 레코드
+}
+
+// ─── 커뮤니티 모델 ───────────────────────────────────────────────
+
+model CommunityPost {
+  id        String    @id @default(cuid())
+  concertId String
+  userId    String
+  title     String
+  content   String
+  concert   Concert   @relation(fields: [concertId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+  comments  Comment[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Comment {
+  id        String        @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id])
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
